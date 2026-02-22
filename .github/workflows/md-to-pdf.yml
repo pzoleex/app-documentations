@@ -1,0 +1,56 @@
+name: Generate PDFs from Markdown
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.md'
+      - '!README.md'  # README-ból ne generáljon PDF-et
+  workflow_dispatch:  # Kézi indítás is lehetséges
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pandoc and LaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-xetex
+
+      - name: Create output directory
+        run: mkdir -p pdf
+
+      - name: Convert MD files to PDF
+        run: |
+          for md_file in $(find . -name '*.md' ! -name 'README.md' -type f); do
+            filename=$(basename "$md_file" .md)
+            dir=$(dirname "$md_file")
+            echo "Converting: $md_file -> pdf/${filename}.pdf"
+            pandoc "$md_file" \
+              -o "pdf/${filename}.pdf" \
+              --pdf-engine=xelatex \
+              -V geometry:margin=2.5cm \
+              -V fontsize=11pt \
+              -V colorlinks=true \
+              -V linkcolor=blue \
+              -V urlcolor=blue \
+              --highlight-style=tango \
+              --toc \
+              -V toc-title="Table of Contents"
+          done
+
+      - name: Commit and push PDFs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pdf/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Auto-generate PDFs from Markdown files"
+            git push
+          fi
